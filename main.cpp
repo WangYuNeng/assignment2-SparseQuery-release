@@ -29,6 +29,16 @@ vector<string> split_at(const string& t, const string& delimiter) {
 }
 
 // -------------------------------------------------
+// Type information for table names in the database
+// -------------------------------------------------
+enum TableName {
+  TRADABLE,
+  PRICE_OVER_TIME,
+  VOLUME_OVER_TIME,
+  TRADES
+};
+
+// -------------------------------------------------
 // Type information for fields in the database 
 // -------------------------------------------------
 enum FieldType {
@@ -319,7 +329,24 @@ class ReferenceQueryEngine : public QueryEngine {
 
     vector<DenseTable> tables;
 
+    // ---------------------------------------------------------------------------------
+    // Some notes on my tables:
+    // I believe the most efficient way is to perform the query with parsing and reture 
+    // stored results when exe(). But that sounds not the purpose of this assignment.
+    // Here's some bottomlines which I think is reasonable for the query engine. 
+    // 1. Datastructures contain the same amount of information with DenseTable, i.e. can 
+    // tranform from one to the other and vice versa. 
+    // 2. Only save data in loadTablesFromCSV and do not perform any query-related computation.
+    // ---------------------------------------------------------------------------------
+    vector<tuple<std::string, vector<std::string>, vector<FieldType>>> table_headers;
+    map<std::string, std::string> name_to_class;
+    map<std::string, map<int, float>> name_to_date_price, name_to_date_volume;
+    map<std::string, vector<tuple<int, int, int>>> name_to_trades;
+
     virtual void loadTablesFromCSV(const std::vector<vector<string> >& lines) {
+
+      std::string cur_table;
+      int cur_table_flag;
 
       for (int i = 0; i < (int) lines.size(); i++)  {
         auto l = lines.at(i);
@@ -351,6 +378,18 @@ class ReferenceQueryEngine : public QueryEngine {
           }
           tables.push_back(DenseTable(l.at(1), columnNames, columnTypes));
 
+          cur_table = l.at(1);
+          table_headers.push_back(make_tuple(cur_table, columnNames, columnTypes));
+          if (cur_table == "tradable") {
+            cur_table_flag = TRADABLE;
+          } else if (cur_table == "price-over-time") {
+            cur_table_flag = PRICE_OVER_TIME;
+          } else if (cur_table == "volume-over-time") {
+            cur_table_flag = VOLUME_OVER_TIME;
+          } else if (cur_table == "trades") {
+            cur_table_flag = TRADES;
+          } // else assert(false);
+
           i += 2;
         } else {
           assert(tables.size() > 0);
@@ -375,6 +414,60 @@ class ReferenceQueryEngine : public QueryEngine {
           }
 
           currentTable.addRecord(record);
+          std::string name, asset_class;
+          int id, day, quant;
+          float price, volume;
+          switch (cur_table_flag)
+          {
+          case TRADABLE: {
+            name = static_cast<StringField*>(record[0].get())->val;
+            asset_class = static_cast<StringField*>(record[1].get())->val;
+            name_to_class.at(name) = asset_class;
+            break;
+          }
+          case PRICE_OVER_TIME: {
+            name = static_cast<StringField*>(record[1].get())->val;
+            day = static_cast<IntField*>(record[0].get())->val;
+            price = static_cast<FloatField*>(record[2].get())->val;
+            auto search = name_to_date_price.find(name);
+            if (search != name_to_date_price.end()) {
+              (search->second).at(day) = price;
+            } else {
+              auto price_map = map<int, float>{{day, price}};
+              name_to_date_price.at(name) = price_map;
+            }
+            break;
+          }
+          case VOLUME_OVER_TIME: {
+            name = static_cast<StringField*>(record[1].get())->val;
+            day = static_cast<IntField*>(record[0].get())->val;
+            volume = static_cast<FloatField*>(record[2].get())->val;
+            auto search = name_to_date_volume.find(name);
+            if (search != name_to_date_volume.end()) {
+              (search->second).at(day) = volume;
+            } else {
+              auto volume_map = map<int, float>{{day, volume}};
+              name_to_date_volume.at(name) = volume_map;
+            }
+            break;
+          }
+          case TRADES: {
+            name = static_cast<StringField*>(record[2].get())->val;
+            day = static_cast<IntField*>(record[1].get())->val;
+            id = static_cast<IntField*>(record[0].get())->val;
+            quant = static_cast<IntField*>(record[3].get())->val;
+            auto search = name_to_trades.find(name);
+            if (search != name_to_trades.end()) {
+              (search->second).push_back(make_tuple(id, day, quant));
+            } else {
+              auto vec = vector<tuple<int, int, int>>{(id, day, quant)};
+              name_to_trades.at(name) = vec;
+            }
+            break;
+          }
+          default:
+            continue; // assert(false)
+          }
         }
       }
 
@@ -382,6 +475,8 @@ class ReferenceQueryEngine : public QueryEngine {
 
     virtual std::unique_ptr<Table> exe() {
       // STUDENTS: FILL IN THIS FUNCTION
+
+
       return nullptr;
     }
 };
