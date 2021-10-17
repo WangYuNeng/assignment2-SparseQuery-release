@@ -476,8 +476,66 @@ class ReferenceQueryEngine : public QueryEngine {
     virtual std::unique_ptr<Table> exe() {
       // STUDENTS: FILL IN THIS FUNCTION
 
+      auto valid_stock_cnt = 0, valid_bond_cnt = 0;
+      auto valid_flag = false;
+      for (auto ite = name_to_class.begin(); ite != name_to_class.end(); ++ite) {
+        if (ite->second != "stock" && ite->second != "bond" ) {
+          continue;
+        }
+        auto& name = ite->first;
 
-      return nullptr;
+        auto trades_ite = name_to_trades.find(name);
+        if (trades_ite == name_to_trades.end())
+          continue;
+        
+        auto search = name_to_date_price.find(name);
+        if (search != name_to_date_price.end()) {
+          auto& date_to_price = search->second;
+          valid_flag = true;
+          for (auto ite2 = date_to_price.lower_bound(13); ite2 != date_to_price.end() && ite2->first <= 268; ++ite2) {
+            if (ite2->second > 299.0) {
+              valid_flag = false;
+              break;
+            }
+          }
+        }
+        if (valid_flag == true) {
+          if (ite->second == "stock") valid_stock_cnt += trades_ite->second.size();
+          else valid_bond_cnt += trades_ite->second.size();
+          continue;
+        } 
+        search = name_to_date_volume.find(name);
+        if (search != name_to_date_volume.end()) {
+          auto& date_to_volume = search->second;
+          valid_flag = true;
+          for (auto ite2 = date_to_volume.lower_bound(13); ite2 != date_to_volume.end() && ite2->first <= 268; ++ite2) {
+            if (ite2->second < 10.0) {
+              valid_flag = false;
+              break;
+            }
+          }
+        }
+        if (valid_flag == true) {
+          if (ite->second == "stock") valid_stock_cnt += trades_ite->second.size();
+          else valid_bond_cnt += trades_ite->second.size();
+        } 
+      }
+
+      auto ret_table = new DenseTable(string("asset-class_counts"), {string("asset-class"), 
+                            string("count")}, {FIELD_TYPE_STRING, FIELD_TYPE_INT});
+      vector<unique_ptr<Field> > record;
+      if (valid_bond_cnt != 0) {
+        record.push_back(unique_ptr<Field>(new StringField("bond")));
+        record.push_back(unique_ptr<Field>(new IntField(valid_bond_cnt)));
+        ret_table->addRecord(record);
+        record.clear();
+      }
+      if (valid_stock_cnt != 0) {
+        record.push_back(unique_ptr<Field>(new StringField("stock")));
+        record.push_back(unique_ptr<Field>(new IntField(valid_stock_cnt)));
+        ret_table->addRecord(record);
+      }
+      return unique_ptr<Table>(ret_table);
     }
 };
 
