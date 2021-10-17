@@ -413,7 +413,6 @@ class ReferenceQueryEngine : public QueryEngine {
             }
           }
 
-          currentTable.addRecord(record);
           std::string name, asset_class;
           int id, day, quant;
           float price, volume;
@@ -422,7 +421,7 @@ class ReferenceQueryEngine : public QueryEngine {
           case TRADABLE: {
             name = static_cast<StringField*>(record[0].get())->val;
             asset_class = static_cast<StringField*>(record[1].get())->val;
-            name_to_class.at(name) = asset_class;
+            name_to_class.insert({name, asset_class});
             break;
           }
           case PRICE_OVER_TIME: {
@@ -431,10 +430,10 @@ class ReferenceQueryEngine : public QueryEngine {
             price = static_cast<FloatField*>(record[2].get())->val;
             auto search = name_to_date_price.find(name);
             if (search != name_to_date_price.end()) {
-              (search->second).at(day) = price;
+              (search->second).insert({day, price});
             } else {
               auto price_map = map<int, float>{{day, price}};
-              name_to_date_price.at(name) = price_map;
+              name_to_date_price.insert({name, price_map});
             }
             break;
           }
@@ -444,10 +443,10 @@ class ReferenceQueryEngine : public QueryEngine {
             volume = static_cast<FloatField*>(record[2].get())->val;
             auto search = name_to_date_volume.find(name);
             if (search != name_to_date_volume.end()) {
-              (search->second).at(day) = volume;
+              (search->second).insert({day, volume});
             } else {
               auto volume_map = map<int, float>{{day, volume}};
-              name_to_date_volume.at(name) = volume_map;
+              name_to_date_volume.insert({name, volume_map});
             }
             break;
           }
@@ -460,14 +459,15 @@ class ReferenceQueryEngine : public QueryEngine {
             if (search != name_to_trades.end()) {
               (search->second).push_back(make_tuple(id, day, quant));
             } else {
-              auto vec = vector<tuple<int, int, int>>{(id, day, quant)};
-              name_to_trades.at(name) = vec;
+              auto vec = vector<tuple<int, int, int>>{make_tuple(id, day, quant)};
+              name_to_trades.insert({name, vec});
             }
             break;
           }
           default:
-            continue; // assert(false)
+            break; // assert(false)
           }
+          currentTable.addRecord(record);
         }
       }
 
